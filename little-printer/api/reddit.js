@@ -1,44 +1,25 @@
-const fetch = require("node-fetch");
+const Parser = require("rss-parser");
+const rssParser = new Parser();
 
 module.exports = async (req, res) => {
-  const { sub = "aww", sort = "hot", limit = "5" } = req.query || {};
+  const { url } = req.query || {};
+
+  if (!url) {
+    res.status(400).json({ error: "Missing url query param" });
+    return;
+  }
 
   try {
-    const url = `https://www.reddit.com/r/${encodeURIComponent(
-      sub
-    )}/${sort}.json?limit=${encodeURIComponent(limit)}`;
-
-    const r = await fetch(url, {
-      headers: {
-        "User-Agent": "LittleThermalPrinter/1.0 (by u-yourname)"
-      }
-    });
-
-    if (!r.ok) {
-      console.error("Reddit HTTP error:", r.status);
-      res.status(r.status).json({ error: "Reddit fetch failed" });
-      return;
-    }
-
-    const data = await r.json();
-    const items = (data.data && data.data.children || []).map(c => {
-      const p = c.data;
-      return {
-        title: p.title,
-        author: p.author,
-        score: p.score,
-        url: p.url_overridden_by_dest || p.url,
-        permalink: "https://reddit.com" + p.permalink,
-        is_self: p.is_self,
-        selftext: p.selftext,
-        created_utc: p.created_utc,
-        over_18: p.over_18
-      };
-    });
-
-    res.status(200).json({ subreddit: sub, items });
+    const feed = await rssParser.parseURL(url.toString());
+    const items = (feed.items || []).slice(0, 5).map(item => ({
+      title: item.title,
+      link: item.link,
+      date: item.isoDate || item.pubDate,
+      contentSnippet: item.contentSnippet || ""
+    }));
+    res.status(200).json({ title: feed.title, items });
   } catch (err) {
-    console.error("Reddit error:", err.message);
-    res.status(500).json({ error: "Reddit error" });
+    console.error("RSS error:", err.message);
+    res.status(500).json({ error: "Failed to fetch RSS" });
   }
 };
