@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Little Printer Web</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --paper-width: 384px; /* typical 58mm thermal at ~203dpi */
+      --border-gray: #444;
+      --ink: #000;
+      --bg: #f5f5f5;
+      --font-main: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                   "Helvetica Neue", Arial, sans-serif;
+      --font-mono: ui-monospace, Menlo, Monaco, "SF Mono", Consolas, "Courier New", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--font-main);
+      background: #111;
+      color: #eee;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    .app {
+      display: flex;
+      flex: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px;
+      gap: 16px;
+    }
+
+    @media (max-width: 900px) {
+      .app {
+        flex-direction: column;
+      }
+    }
+
+    .panel {
+      background: #181818;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+      border: 1px solid #2a2a2a;
+    }
+
+    .editor {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .editor h1 {
+      font-size: 1.3rem;
+      margin: 0 0 4px;
+      letter-spacing: 0.04em;
+    }
+
+    .editor small {
+      opacity: 0.7;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 8px;
+    }
+
+    label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #bbb;
+    }
+
+    input[type="text"],
+    input[type="date"],
+    textarea,
+    select {
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #eee;
+      padding: 8px 10px;
+      font-family: var(--font-main);
+      font-size: 0.9rem;
+      outline: none;
+    }
+
+    textarea {
+      min-height: 60px;
+      resize: vertical;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      border-color: #999;
+    }
+
+    .columns {
+      display: flex;
+      gap: 8px;
+    }
+
+    .columns > .field-group {
+      flex: 1;
+    }
+
+    .checklist-hint {
+      font-size: 0.75rem;
+      opacity: 0.7;
+    }
+
+    .toggle-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      font-size: 0.8rem;
+    }
+
+    .toggle-row label {
+      text-transform: none;
+      letter-spacing: normal;
+      color: #ddd;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .toggle-row input[type="checkbox"] {
+      accent-color: #fafafa;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+      align-items: center;
+    }
+
+    button {
+      border-radius: 999px;
+      border: 1px solid #444;
+      background: #fafafa;
+      color: #111;
+      padding: 8px 16px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    button.secondary {
+      background: #222;
+      color: #eee;
+    }
+
+    button:hover {
+      filter: brightness(1.05);
+    }
+
+    .preview-wrapper {
+      width: var(--paper-width);
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 16px;
+    }
+
+    .preview-panel {
+      background: radial-gradient(circle at top left, #333 0, #111 45%, #050505 100%);
+      border-radius: 24px;
+      padding: 18px 12px;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .device-face {
+      width: 120px;
+      height: 120px;
+      background: #f4f4f4;
+      border-radius: 14px;
+      border: 2px solid #ccc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .device-face::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(220,220,220,0.8));
+      mix-blend-mode: screen;
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    .face-inner {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      font-size: 22px;
+      color: #222;
+    }
+
+    .face-hair {
+      width: 70px;
+      height: 24px;
+      border-radius: 40px;
+      border-top-left-radius: 0;
+      border-top-right-radius: 0;
+      border: 2px solid #000;
+      border-top: none;
+      margin: 0 auto 6px;
+      background-image: repeating-linear-gradient(
+        -45deg,
+        #000 0,
+        #000 1px,
+        transparent 1px,
+        transparent 3px
+      );
+    }
+
+    .face-eyes {
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      margin-bottom: 3px;
+    }
+
+    .face-eyes span {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #000;
+    }
+
+    .face-mouth {
+      width: 18px;
+      height: 10px;
+      border-radius: 0 0 18px 18px;
+      border: 2px solid #000;
+      border-top: none;
+      margin: 0 auto;
+    }
+
+    .device-legs {
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      margin-top: -8px;
+    }
+
+    .device-leg {
+      width: 8px;
+      height: 40px;
+      border-radius: 999px;
+      background: #ff5c1c;
+    }
+
+    .device-leg:nth-child(1) {
+      transform: rotate(6deg);
+    }
+    .device-leg:nth-child(2) {
+      transform: rotate(-6deg);
+    }
+
+    /* Printable strip */
+    .strip {
+      width: var(--paper-width);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 4px 4px 16px 16px;
+      padding: 12px 16px 20px;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
+      font-size: 12px;
+    }
+
+    .strip-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #000;
+      padding-bottom: 6px;
+      margin-bottom: 6px;
+    }
+
+    .strip-title {
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 11px;
+    }
+
+    .strip-date {
+      font-family: var(--font-mono);
+      font-size: 10px;
+    }
+
+    .strip-subtitle {
+      font-size: 11px;
+      margin-bottom: 6px;
+    }
+
+    .strip-section {
+      margin-top: 6px;
+      padding-top: 4px;
+      border-top: 1px dashed #000;
+    }
+
+    .strip-section h3 {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin: 0 0 3px;
+    }
+
+    .strip-body {
+      font-size: 11px;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .strip-checklist {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .strip-checklist li::before {
+      content: "☐ ";
+    }
+
+    .strip-quote {
+      font-style: italic;
+      font-size: 11px;
+      border-left: 2px solid #000;
+      padding-left: 6px;
+      margin-top: 4px;
+    }
+
+    .strip-footer {
+      margin-top: 8px;
+      padding-top: 4px;
+      border-top: 1px solid #000;
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+      font-family: var(--font-mono);
+    }
+
+    .strip-footer span {
+      opacity: 0.9;
+    }
+
+    .mini-face {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      border: 1px solid #000;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 4px;
+      font-size: 12px;
+    }
+
+    /* Print styles */
+    @media print {
+      body {
+        background: #fff;
+      }
+      .app {
+        margin: 0;
+        padding: 0;
+      }
+      .editor {
+        display: none;
+      }
+      .preview-wrapper {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+      }
+      .preview-panel {
+        background: #fff;
+        padding: 0;
+        box-shadow: none;
+      }
+      .device-face,
+      .device-legs {
+        display: none;
+      }
+      .strip {
+        border-radius: 0;
+        box-shadow: none;
+        margin: 0 auto;
+      }
+      @page {
+        margin: 0;
+        size: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Left: Editor -->
+    <section class="panel editor">
+      <div>
+        <h1>Little Printer Web</h1>
+        <small>Compose your tiny newspaper. Live feeds + cute chaos per print.</small>
+      </div>
+
+      <div class="columns">
+        <div class="field-group">
+          <label for="title">Header title</label>
+          <input id="title" type="text" value="Morning Briefing" />
+        </div>
+        <div class="field-group">
+          <label for="subtitle">Sub-title</label>
+          <input id="subtitle" type="text" value="Tiny paper for a big day" />
+        </div>
+      </div>
+
+      <div class="columns">
+        <div class="field-group">
+          <label for="date">Date</label>
+          <input id="date" type="date" />
+        </div>
+        <div class="field-group">
+          <label for="footerLeft">Footer left</label>
+          <input id="footerLeft" type="text" value="@little-printer-web" />
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="mainText">Daily brief (your notes)</label>
+        <textarea id="mainText">• Coffee  
+• Chaos  
+• Try to be nice anyway.</textarea>
+      </div>
+
+      <div class="field-group">
+        <label for="checklist">Checklist items</label>
+        <textarea id="checklist">Feed dog
+Charge phone
+Water plants</textarea>
+        <div class="checklist-hint">
+          One item per line. Empty lines are ignored.
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="quote">Quote / mantra (optional)</label>
+        <textarea id="quote">“Done is better than perfect. Except for hair — there, perfection or bust.”</textarea>
+      </div>
+
+      <div class="field-group">
+        <label for="footerRight">Footer right</label>
+        <input id="footerRight" type="text" value="Printed with ❤️" />
+      </div>
+
+      <div class="field-group">
+        <label>Sections to include</label>
+        <div class="toggle-row">
+          <label><input type="checkbox" id="sectionDaily" checked />Daily brief</label>
+          <label><input type="checkbox" id="sectionRSS" checked />RSS / comics</label>
+          <label><input type="checkbox" id="sectionReddit" />Reddit</label>
+          <label><input type="checkbox" id="sectionPuzzle" checked />Puzzle</label>
+          <label><input type="checkbox" id="sectionQuote" checked />Quote</label>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="rssUrl">Comics / RSS feed URL</label>
+        <input id="rssUrl" type="text" value="https://xkcd.com/rss.xml" />
+        <small>e.g. any RSS: comics, news, etc.</small>
+      </div>
+
+      <div class="columns">
+        <div class="field-group">
+          <label for="redditSub">Reddit subreddit</label>
+          <input id="redditSub" type="text" value="aww" />
+        </div>
+        <div class="field-group">
+          <label for="redditSort">Reddit sort</label>
+          <select id="redditSort">
+            <option value="hot">Hot</option>
+            <option value="top">Top</option>
+            <option value="new">New</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="puzzleType">Puzzle type</label>
+        <select id="puzzleType">
+          <option value="wordsearch">Tiny word search</option>
+          <option value="math">Number puzzle</option>
+          <option value="riddle">Riddle</option>
+        </select>
+      </div>
+
+      <div class="button-row">
+        <button id="printBtn" type="button">Print to thermal printer</button>
+        <button class="secondary" id="randomizeBtn" type="button">Random cute face</button>
+        <span style="font-size:0.8rem; opacity:0.7;">
+          Pair your printer first, then choose it in the print dialog.
+        </span>
+      </div>
+    </section>
+
+    <!-- Right: Device + strip preview -->
+    <section class="panel preview-wrapper">
+      <div class="preview-panel">
+        <div class="device-face">
+          <div class="face-inner">
+            <div class="face-hair"></div>
+            <div class="face-eyes"><span></span><span></span></div>
+            <div class="face-mouth"></div>
+          </div>
+        </div>
+        <div class="device-legs">
+          <div class="device-leg"></div>
+          <div class="device-leg"></div>
+        </div>
+
+        <article class="strip" id="strip">
+          <header class="strip-header">
+            <div class="strip-title" id="stripTitle"></div>
+            <div class="strip-date" id="stripDate"></div>
+          </header>
+
+          <div class="strip-subtitle" id="stripSubtitle"></div>
+
+          <section class="strip-section" id="todaySection">
+            <h3>Today</h3>
+            <div class="strip-body" id="stripMain"></div>
+          </section>
+
+          <section class="strip-section" id="checklistSection">
+            <h3>Checklist</h3>
+            <ul class="strip-checklist" id="stripChecklist"></ul>
+          </section>
+
+          <section class="strip-section" id="rssSection">
+            <h3>From your feed</h3>
+            <div class="strip-body" id="stripRSS"></div>
+          </section>
+
+          <section class="strip-section" id="redditSection">
+            <h3>Reddit</h3>
+            <div class="strip-body" id="stripReddit"></div>
+          </section>
+
+          <section class="strip-section" id="puzzleSection">
+            <h3>Puzzle</h3>
+            <div class="strip-body" id="stripPuzzle"></div>
+          </section>
+
+          <section class="strip-section" id="quoteSection">
+            <h3>Thought of the day</h3>
+            <div class="strip-quote" id="stripQuote"></div>
+          </section>
+
+          <footer class="strip-footer">
+            <span id="stripFooterLeft">
+              <span class="mini-face">☺</span>
+              little printer web
+            </span>
+            <span id="stripFooterRight"></span>
+          </footer>
+        </article>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // ===== CONFIG: set this to your backend URL =====
+    const API_BASE = "https://your-proxy-domain.com"; // e.g. https://little-printer-proxy.onrender.com
+
+    // ===== Helpers =====
+    function formatDateForStrip(dateStr) {
+      if (!dateStr) {
+        const d = new Date();
+        return d.toLocaleDateString(undefined, {
+          year: "numeric",
+          month: "short",
+          day: "2-digit"
+        });
+      }
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "2-digit"
+      });
+    }
+
+    function randomFrom(arr) {
+      return arr[Math.floor(Math.random() * arr.length)];
+    }
+
+    // ===== RSS + Reddit fetchers =====
+    async function fetchRSSPreview(url) {
+      if (!url) return null;
+      try {
+        const res = await fetch(`${API_BASE}/api/rss?url=${encodeURIComponent(url)}`);
+        if (!res.ok) throw new Error("RSS error");
+        const data = await res.json();
+        if (!data.items || !data.items.length) return null;
+        return data.items[0]; // latest or first
+      } catch (e) {
+        console.error("RSS fetch failed", e);
+        return null;
+      }
+    }
+
+    async function fetchRedditPreview(sub, sort = "hot") {
+      if (!sub) return null;
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/reddit?sub=${encodeURIComponent(sub)}&sort=${encodeURIComponent(sort)}&limit=5`
+        );
+        if (!res.ok) throw new Error("Reddit error");
+        const data = await res.json();
+        if (!data.items || !data.items.length) return null;
+
+        const candidates = data.items.filter(i => !i.over_18);
+        const picked = candidates[Math.floor(Math.random() * candidates.length)] || data.items[0];
+        return picked;
+      } catch (e) {
+        console.error("Reddit fetch failed", e);
+        return null;
+      }
+    }
+
+    // ===== Puzzles =====
+    function makeWordSearch() {
+      const wordSets = [
+        ["COFFEE", "CHAOS", "NAP"],
+        ["GLITTER", "SHAMPOO", "FOIL"],
+        ["PRINTER", "PAPER", "CABLE"],
+      ];
+      const words = randomFrom(wordSets);
+      return {
+        title: "Find these words:",
+        body: words.join("  ·  ")
+      };
+    }
+
+    function makeMathPuzzle() {
+      const a = 10 + Math.floor(Math.random() * 40);
+      const b = 2 + Math.floor(Math.random() * 9);
+      const c = 1 + Math.floor(Math.random() * 9);
+      const target = a + b * c;
+      return {
+        title: "Tiny equation",
+        body: `? + ${b} × ${c} = ${target}\nSolve for ?`
+      };
+    }
+
+    function makeRiddle() {
+      const riddles = [
+        ["What has many keys but can’t open a door?", "A keyboard."],
+        ["What gets wetter the more it dries?", "A towel."],
+        ["What runs but never walks?", "Water."],
+      ];
+      const [q, a] = randomFrom(riddles);
+      return {
+        title: "Riddle",
+        body: q + "\n(Answer: " + a + ")"
+      };
+    }
+
+    function makePuzzle(type) {
+      if (type === "math") return makeMathPuzzle();
+      if (type === "riddle") return makeRiddle();
+      return makeWordSearch();
+    }
+
+    // ===== Sync static content into strip =====
+    function syncStrip() {
+      const title = document.getElementById("title").value || "Daily Strip";
+      const subtitle = document.getElementById("subtitle").value || "";
+      const dateVal = document.getElementById("date").value;
+      const mainText = document.getElementById("mainText").value || "";
+      const checklistRaw = document.getElementById("checklist").value || "";
+      const quote = document.getElementById("quote").value || "";
+      const footerLeft = document.getElementById("footerLeft").value || "";
+      const footerRight = document.getElementById("footerRight").value || "";
+
+      const includeDaily = document.getElementById("sectionDaily").checked;
+      const includeQuote = document.getElementById("sectionQuote").checked;
+
+      document.getElementById("stripTitle").textContent = title;
+      document.getElementById("stripSubtitle").textContent = subtitle;
+      document.getElementById("stripDate").textContent = formatDateForStrip(dateVal);
+
+      const todaySection = document.getElementById("todaySection");
+      if (includeDaily && mainText.trim().length) {
+        document.getElementById("stripMain").textContent = mainText;
+        todaySection.style.display = "block";
+      } else {
+        todaySection.style.display = "none";
+      }
+
+      // Checklist
+      const checklistSection = document.getElementById("checklistSection");
+      const listEl = document.getElementById("stripChecklist");
+      listEl.innerHTML = "";
+
+      checklistRaw
+        .split("\n")
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .forEach(line => {
+          const li = document.createElement("li");
+          li.textContent = line;
+          listEl.appendChild(li);
+        });
+
+      checklistSection.style.display =
+        listEl.children.length > 0 ? "block" : "none";
+
+      // Quote
+      const quoteSection = document.getElementById("quoteSection");
+      const quoteEl = document.getElementById("stripQuote");
+
+      if (includeQuote && quote.trim().length) {
+        quoteEl.textContent = quote;
+        quoteSection.style.display = "block";
+      } else {
+        quoteSection.style.display = "none";
+      }
+
+      // Footer
+      const footerLeftEl = document.getElementById("stripFooterLeft");
+      const footerRightEl = document.getElementById("stripFooterRight");
+
+      if (footerLeft.trim()) {
+        footerLeftEl.innerHTML =
+          '<span class="mini-face">☺</span>' +
+          footerLeft.replace(/</g, "&lt;");
+      } else {
+        footerLeftEl.innerHTML =
+          '<span class="mini-face">☺</span> little printer web';
+      }
+
+      footerRightEl.textContent = footerRight;
+    }
+
+    // ===== Populate dynamic widgets (RSS, Reddit, Puzzle, auto-quote) =====
+    async function populateDynamicWidgets() {
+      const rssSection = document.getElementById("rssSection");
+      const redditSection = document.getElementById("redditSection");
+      const puzzleSection = document.getElementById("puzzleSection");
+
+      rssSection.style.display = "none";
+      redditSection.style.display = "none";
+      puzzleSection.style.display = "none";
+
+      const rssUrl = document.getElementById("rssUrl").value.trim();
+      const redditSub = document.getElementById("redditSub").value.trim();
+      const redditSort = document.getElementById("redditSort").value;
+      const puzzleType = document.getElementById("puzzleType").value;
+      const quoteTextarea = document.getElementById("quote");
+
+      const includeRSS = document.getElementById("sectionRSS").checked;
+      const includeReddit = document.getElementById("sectionReddit").checked;
+      const includePuzzle = document.getElementById("sectionPuzzle").checked;
+      const includeQuote = document.getElementById("sectionQuote").checked;
+
+      // RSS
+      if (includeRSS && rssUrl) {
+        const item = await fetchRSSPreview(rssUrl);
+        if (item) {
+          document.getElementById("stripRSS").textContent =
+            `${item.title}\n${item.contentSnippet || ""}`;
+          rssSection.style.display = "block";
+        }
+      }
+
+      // Reddit
+      if (includeReddit && redditSub) {
+        const post = await fetchRedditPreview(redditSub, redditSort);
+        if (post) {
+          let text = post.title;
+          if (post.is_self && post.selftext) {
+            const truncated = post.selftext.slice(0, 140);
+            text += "\n\n" + truncated + (post.selftext.length > 140 ? "…" : "");
+          }
+          text += `\n— u/${post.author} (${post.score}★)`;
+          document.getElementById("stripReddit").textContent = text;
+          redditSection.style.display = "block";
+        }
+      }
+
+      // Puzzle
+      if (includePuzzle) {
+        const p = makePuzzle(puzzleType);
+        document.querySelector("#puzzleSection h3").textContent = p.title;
+        document.getElementById("stripPuzzle").textContent = p.body;
+        puzzleSection.style.display = "block";
+      }
+
+      // Auto-fill quote if enabled but empty
+      if (includeQuote && !quoteTextarea.value.trim()) {
+        const quotes = [
+          "“Be the chaos you wish to see in the world — but keep the receipts.”",
+          "“You are 90% coffee, 10% questionable decisions.”",
+          "“Today’s goal: survive. Bonus level: thrive.”"
+        ];
+        quoteTextarea.value = randomFrom(quotes);
+      }
+    }
+
+    // ===== Randomize face =====
+    document.getElementById("randomizeBtn").addEventListener("click", () => {
+      const hair = document.querySelector(".face-hair");
+      const mouth = document.querySelector(".face-mouth");
+      const eyes = document.querySelectorAll(".face-eyes span");
+
+      const hairPatterns = [
+        "repeating-linear-gradient(-45deg,#000 0,#000 1px,transparent 1px,transparent 3px)",
+        "repeating-linear-gradient(45deg,#000 0,#000 1px,transparent 1px,transparent 2px)",
+        "repeating-linear-gradient(0deg,#000 0,#000 1px,transparent 1px,transparent 2px)"
+      ];
+      const mouthWidths = [16, 20, 24];
+      const eyeGap = [10, 14, 18];
+
+      hair.style.backgroundImage =
+        hairPatterns[Math.floor(Math.random() * hairPatterns.length)];
+
+      const mw = mouthWidths[Math.floor(Math.random() * mouthWidths.length)];
+      mouth.style.width = mw + "px";
+
+      const gap = eyeGap[Math.floor(Math.random() * eyeGap.length)];
+      document.querySelector(".face-eyes").style.gap = gap + "px";
+
+      eyes.forEach((eye) => {
+        const size = 3 + Math.floor(Math.random() * 3);
+        eye.style.width = size + "px";
+        eye.style.height = size + "px";
+      });
+    });
+
+    // ===== Live update on input =====
+    [
+      "title",
+      "subtitle",
+      "date",
+      "mainText",
+      "checklist",
+      "quote",
+      "footerLeft",
+      "footerRight",
+      "sectionDaily",
+      "sectionQuote"
+    ].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("input", syncStrip);
+      if (el && el.type === "checkbox") {
+        el.addEventListener("change", syncStrip);
+      }
+    });
+
+    // ===== Print button =====
+    document.getElementById("printBtn").addEventListener("click", async () => {
+      syncStrip();                // sync current edits
+      await populateDynamicWidgets(); // fetch live stuff + generate puzzle
+      syncStrip();                // re-sync in case quote auto-filled
+      window.print();
+    });
+
+    // ===== Init =====
+    (function init() {
+      const dateInput = document.getElementById("date");
+      if (!dateInput.value) {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, "0");
+        const dd = String(today.getDate()).padStart(2, "0");
+        dateInput.value = `${yyyy}-${mm}-${dd}`;
+      }
+      // Hide dynamic sections initially
+      document.getElementById("rssSection").style.display = "none";
+      document.getElementById("redditSection").style.display = "none";
+      document.getElementById("puzzleSection").style.display = "none";
+      syncStrip();
+    })();
+  </script>
+</body>
+</html>
