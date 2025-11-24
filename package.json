@@ -1,16 +1,13 @@
 {
-  "name": "little-printer-proxy",
+  "name": "little-printer-web",
   "version": "1.0.0",
-  "description": "Proxy for Little Printer Web (RSS + Reddit)",
-  "main": "server.js",
-  "type": "commonjs",
+  "description": "Little Printer style thermal web app with RSS + Reddit",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node api/rss.js"
   },
   "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.19.2",
-    "node-fetch": "^2.7.0",
-    "rss-parser": "^3.13.0"
+    "rss-parser": "^3.13.0",
+    "node-fetch": "^2.7.0"
   }
 }
