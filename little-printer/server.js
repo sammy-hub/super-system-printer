@@ -11,7 +11,7 @@ const rssParser = new Parser();
 app.use(cors({
   origin: [
     "http://localhost:4173",   // dev
-    "https://your-domain.com"  // prod
+    "https://super-system-printer.vercel.app/"  // prod
   ]
 }));
 
