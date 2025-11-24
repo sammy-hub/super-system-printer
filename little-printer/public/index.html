@@ -6,7 +6,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
-      --paper-width: 384px; /* typical 58mm thermal at ~203dpi */
+      /* If your print is squished or cut off, change this:
+         58mm thermal @203dpi ≈ 384px
+         80mm thermal @203dpi ≈ 576px
+      */
+      --paper-width: 384px;
       --border-gray: #444;
       --ink: #000;
       --bg: #f5f5f5;
@@ -286,6 +290,7 @@
     /* Printable strip */
     .strip {
       width: var(--paper-width);
+      max-width: 100%;
       background: #fff;
       color: var(--ink);
       border-radius: 4px 4px 16px 16px;
@@ -390,6 +395,8 @@
     @media print {
       body {
         background: #fff;
+        margin: 0;
+        padding: 0;
       }
       .app {
         margin: 0;
@@ -402,6 +409,7 @@
         margin: 0;
         padding: 0;
         width: 100%;
+        justify-content: center;
       }
       .preview-panel {
         background: #fff;
@@ -430,7 +438,7 @@
     <section class="panel editor">
       <div>
         <h1>Little Printer Web</h1>
-        <small>Compose your tiny newspaper. Live feeds + cute chaos per print.</small>
+        <small>Live feeds, puzzles, and a tiny newspaper for your thermal goblin.</small>
       </div>
 
       <div class="columns">
@@ -496,7 +504,7 @@ Water plants</textarea>
       <div class="field-group">
         <label for="rssUrl">Comics / RSS feed URL</label>
         <input id="rssUrl" type="text" value="https://xkcd.com/rss.xml" />
-        <small>e.g. any RSS: comics, news, etc.</small>
+        <small>Use any RSS feed: comics, news, etc.</small>
       </div>
 
       <div class="columns">
@@ -527,7 +535,7 @@ Water plants</textarea>
         <button id="printBtn" type="button">Print to thermal printer</button>
         <button class="secondary" id="randomizeBtn" type="button">Random cute face</button>
         <span style="font-size:0.8rem; opacity:0.7;">
-          Pair your printer first, then choose it in the print dialog.
+          On iPhone: in the print sheet, pick your thermal printer, margins = none, scale = 100%.
         </span>
       </div>
     </section>
@@ -598,10 +606,9 @@ Water plants</textarea>
   </div>
 
   <script>
-    // ===== CONFIG: set this to your backend URL =====
-    const API_BASE = "https://super-system-printer.vercel.app"; // e.g. https://little-printer-proxy.onrender.com
+    // Automatically point API_BASE at same domain as app (Vercel project)
+    const API_BASE = window.location.origin;
 
-    // ===== Helpers =====
     function formatDateForStrip(dateStr) {
       if (!dateStr) {
         const d = new Date();
@@ -624,15 +631,14 @@ Water plants</textarea>
       return arr[Math.floor(Math.random() * arr.length)];
     }
 
-    // ===== RSS + Reddit fetchers =====
     async function fetchRSSPreview(url) {
       if (!url) return null;
       try {
         const res = await fetch(`${API_BASE}/api/rss?url=${encodeURIComponent(url)}`);
-        if (!res.ok) throw new Error("RSS error");
+        if (!res.ok) throw new Error("RSS error " + res.status);
         const data = await res.json();
         if (!data.items || !data.items.length) return null;
-        return data.items[0]; // latest or first
+        return data.items[0];
       } catch (e) {
         console.error("RSS fetch failed", e);
         return null;
@@ -645,7 +651,7 @@ Water plants</textarea>
         const res = await fetch(
           `${API_BASE}/api/reddit?sub=${encodeURIComponent(sub)}&sort=${encodeURIComponent(sort)}&limit=5`
         );
-        if (!res.ok) throw new Error("Reddit error");
+        if (!res.ok) throw new Error("Reddit error " + res.status);
         const data = await res.json();
         if (!data.items || !data.items.length) return null;
 
@@ -658,7 +664,6 @@ Water plants</textarea>
       }
     }
 
-    // ===== Puzzles =====
     function makeWordSearch() {
       const wordSets = [
         ["COFFEE", "CHAOS", "NAP"],
@@ -702,7 +707,6 @@ Water plants</textarea>
       return makeWordSearch();
     }
 
-    // ===== Sync static content into strip =====
     function syncStrip() {
       const title = document.getElementById("title").value || "Daily Strip";
       const subtitle = document.getElementById("subtitle").value || "";
@@ -728,7 +732,6 @@ Water plants</textarea>
         todaySection.style.display = "none";
       }
 
-      // Checklist
       const checklistSection = document.getElementById("checklistSection");
       const listEl = document.getElementById("stripChecklist");
       listEl.innerHTML = "";
@@ -746,7 +749,6 @@ Water plants</textarea>
       checklistSection.style.display =
         listEl.children.length > 0 ? "block" : "none";
 
-      // Quote
       const quoteSection = document.getElementById("quoteSection");
       const quoteEl = document.getElementById("stripQuote");
 
@@ -757,7 +759,6 @@ Water plants</textarea>
         quoteSection.style.display = "none";
       }
 
-      // Footer
       const footerLeftEl = document.getElementById("stripFooterLeft");
       const footerRightEl = document.getElementById("stripFooterRight");
 
@@ -773,7 +774,6 @@ Water plants</textarea>
       footerRightEl.textContent = footerRight;
     }
 
-    // ===== Populate dynamic widgets (RSS, Reddit, Puzzle, auto-quote) =====
     async function populateDynamicWidgets() {
       const rssSection = document.getElementById("rssSection");
       const redditSection = document.getElementById("redditSection");
@@ -794,7 +794,6 @@ Water plants</textarea>
       const includePuzzle = document.getElementById("sectionPuzzle").checked;
       const includeQuote = document.getElementById("sectionQuote").checked;
 
-      // RSS
       if (includeRSS && rssUrl) {
         const item = await fetchRSSPreview(rssUrl);
         if (item) {
@@ -804,7 +803,6 @@ Water plants</textarea>
         }
       }
 
-      // Reddit
       if (includeReddit && redditSub) {
         const post = await fetchRedditPreview(redditSub, redditSort);
         if (post) {
@@ -819,7 +817,6 @@ Water plants</textarea>
         }
       }
 
-      // Puzzle
       if (includePuzzle) {
         const p = makePuzzle(puzzleType);
         document.querySelector("#puzzleSection h3").textContent = p.title;
@@ -827,7 +824,6 @@ Water plants</textarea>
         puzzleSection.style.display = "block";
       }
 
-      // Auto-fill quote if enabled but empty
       if (includeQuote && !quoteTextarea.value.trim()) {
         const quotes = [
           "“Be the chaos you wish to see in the world — but keep the receipts.”",
@@ -838,7 +834,6 @@ Water plants</textarea>
       }
     }
 
-    // ===== Randomize face =====
     document.getElementById("randomizeBtn").addEventListener("click", () => {
       const hair = document.querySelector(".face-hair");
       const mouth = document.querySelector(".face-mouth");
@@ -868,7 +863,6 @@ Water plants</textarea>
       });
     });
 
-    // ===== Live update on input =====
     [
       "title",
       "subtitle",
@@ -882,21 +876,21 @@ Water plants</textarea>
       "sectionQuote"
     ].forEach(id => {
       const el = document.getElementById(id);
-      if (el) el.addEventListener("input", syncStrip);
-      if (el && el.type === "checkbox") {
+      if (!el) return;
+      if (el.type === "checkbox") {
         el.addEventListener("change", syncStrip);
+      } else {
+        el.addEventListener("input", syncStrip);
       }
     });
 
-    // ===== Print button =====
     document.getElementById("printBtn").addEventListener("click", async () => {
-      syncStrip();                // sync current edits
-      await populateDynamicWidgets(); // fetch live stuff + generate puzzle
-      syncStrip();                // re-sync in case quote auto-filled
+      syncStrip();
+      await populateDynamicWidgets();
+      syncStrip();
       window.print();
     });
 
-    // ===== Init =====
     (function init() {
       const dateInput = document.getElementById("date");
       if (!dateInput.value) {
@@ -906,7 +900,6 @@ Water plants</textarea>
         const dd = String(today.getDate()).padStart(2, "0");
         dateInput.value = `${yyyy}-${mm}-${dd}`;
       }
-      // Hide dynamic sections initially
       document.getElementById("rssSection").style.display = "none";
       document.getElementById("redditSection").style.display = "none";
       document.getElementById("puzzleSection").style.display = "none";
